@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project basedir="." default="package" xmlns:artifact="antlib:org.apache.maven.artifact.ant">
+  <property name="gpg-user" value="dean.ceart@gmail.com"/>
+  <property name="version" value="2.0.4-b09"/>
+  <property name="my-version" value="2.0.4-ceart-b09"/>
+  <property name="work" value="${basedir}/work"/>
+  <property name="lib" value="${basedir}/lib"/>
+  <property name="maven-ant-tasks.version" value="2.1.1"/>
+  <property name="maven-ant-tasks.url"
+            value="http://repo2.maven.org/maven2/org/apache/maven/maven-ant-tasks"/>
+  <condition property="maven-ant-tasks.jar.exists">
+    <available file="${lib}/maven-ant-tasks-${maven-ant-tasks.version}.jar"/>
+  </condition>
+
+  <path id="maven-ant-tasks.classpath" path="${lib}/maven-ant-tasks-${maven-ant-tasks.version}.jar"/>
+
+  <target name="clean">
+    <delete dir="${work}"/>
+  </target>
+
+  <target name="realclean" depends="clean">
+    <delete dir="${lib}"/>
+  </target>
+
+  <target name="maven-ant-tasks-download" unless="maven-ant-tasks.jar.exists">
+    <mkdir dir="${lib}"/>
+    <get src="${maven-ant-tasks.url}/${maven-ant-tasks.version}/maven-ant-tasks-${maven-ant-tasks.version}.jar"
+         dest="${lib}/maven-ant-tasks-${maven-ant-tasks.version}.jar" usetimestamp="true"/>
+  </target>
+
+  <target name="maven-ant-tasks-init" depends="maven-ant-tasks-download" unless="maven-ant-tasks.initialized">
+    <typedef uri="antlib:org.apache.maven.artifact.ant" classpathref="maven-ant-tasks.classpath"/>
+    <!-- define the remote repositories we use -->
+    <artifact:remoteRepository id="central" url="http://repo1.maven.org/maven2"/>
+    <artifact:remoteRepository id="java.net2" url="http://download.java.net/maven/2"/>
+    <property name="maven-ant-tasks.initialized" value="true"/>
+  </target>
+
+  <target name="fetch" depends="maven-ant-tasks-init">
+    <mkdir dir="${work}"/>
+    <artifact:dependencies filesetId="jars"
+                           sourcesFilesetId="sources"
+                           cacheDependencyRefs="true"
+                           dependencyRefsBuildFile="${work}/build-dependencies.xml"
+                           versionsId="dependency.versions">
+      <dependency groupId="com.sun.faces" artifactId="jsf-api" version="${version}"/>
+      <dependency groupId="com.sun.faces" artifactId="jsf-impl" version="${version}"/>
+      <remoteRepository refid="java.net2"/>
+    </artifact:dependencies>
+    <artifact:dependencies filesetId="poms">
+      <dependency groupId="com.sun.faces" artifactId="jsf-api" version="${version}" type="pom"/>
+      <dependency groupId="com.sun.faces" artifactId="jsf-impl" version="${version}" type="pom"/>
+      <remoteRepository refid="java.net2"/>
+    </artifact:dependencies>
+    <copy todir="${work}">
+      <fileset refid="jars"/>
+      <mapper classpathref="maven-ant-tasks.classpath"
+              classname="org.apache.maven.artifact.ant.VersionMapper"
+              from="${dependency.versions}" to="flatten"/>
+    </copy>
+    <copy todir="${work}">
+      <fileset refid="poms"/>
+      <mapper classpathref="maven-ant-tasks.classpath"
+              classname="org.apache.maven.artifact.ant.VersionMapper"
+              from="${dependency.versions}" to="flatten"/>
+    </copy>
+    <copy todir="${work}">
+      <fileset refid="sources"/>
+      <mapper classpathref="maven-ant-tasks.classpath"
+              classname="org.apache.maven.artifact.ant.VersionMapper"
+              from="${dependency.versions}" to="flatten"/>
+    </copy>
+  </target>
+
+  <target name="extract" depends="fetch">
+    <mkdir dir="${work}/api/src/main/java"/>
+    <mkdir dir="${work}/api/src/main/resources"/>
+    <mkdir dir="${work}/impl/src/main/java"/>
+    <mkdir dir="${work}/impl/src/main/resources"/>
+    <unzip src="${work}/jsf-api-sources.jar" dest="${work}/api/src/main/java">
+      <patternset>
+        <include name="**/*.java"/>
+        <include name="**/package.html"/>
+      </patternset>
+    </unzip>
+    <unzip src="${work}/jsf-api-sources.jar" dest="${work}/api/src/main/resources">
+      <patternset>
+        <exclude name="**/*.java"/>
+        <exclude name="**/package.html"/>
+      </patternset>
+    </unzip>
+    <unzip src="${work}/jsf-impl-sources.jar" dest="${work}/impl/src/main/java">
+      <patternset>
+        <include name="**/*.java"/>
+        <include name="**/package.html"/>
+        <exclude name="main/java/**"/>
+        <exclude name="main/resources/**"/>
+      </patternset>
+    </unzip>
+    <unzip src="${work}/jsf-impl-sources.jar" dest="${work}/impl/src">
+      <patternset>
+        <include name="main/java/**/*.java"/>
+        <include name="main/java/**/package.html"/>
+        <include name="main/resources/**"/>
+      </patternset>
+    </unzip>
+    <copy file="${work}/jsf-api.pom" tofile="${work}/api/pom.xml"/>
+    <replace file="${work}/api/pom.xml">
+      <replacefilter token="&lt;version&gt;${version}&lt;/version&gt;"
+                     value="&lt;version&gt;${my-version}&lt;/version&gt;"/>
+      <replacefilter token="&lt;extensions&gt;" value="&lt;!--extensions&gt;"/>
+      <replacefilter token="&lt;/extensions&gt;" value="&lt;/extensions--&gt;"/>
+      <replacefilter token="&lt;repositories&gt;" value="&lt;!--repositories&gt;"/>
+      <replacefilter token="&lt;/repositories&gt;" value="&lt;/repositories--&gt;"/>
+      <replacefilter token="&lt;distributionManagement&gt;" value="&lt;!--distributionManagement&gt;"/>
+      <replacefilter token="&lt;/distributionManagement&gt;" value="&lt;/distributionManagement--&gt;"/>
+    </replace>
+    <copy file="${work}/jsf-impl.pom" tofile="${work}/impl/pom.xml"/>
+    <replace file="${work}/impl/pom.xml">
+      <replacefilter token="&lt;version&gt;${version}&lt;/version&gt;"
+                     value="&lt;version&gt;${my-version}&lt;/version&gt;"/>
+      <replacefilter token="&lt;extensions&gt;" value="&lt;!--extensions&gt;"/>
+      <replacefilter token="&lt;/extensions&gt;" value="&lt;/extensions--&gt;"/>
+      <replacefilter token="&lt;repositories&gt;" value="&lt;!--repositories&gt;"/>
+      <replacefilter token="&lt;/repositories&gt;" value="&lt;/repositories--&gt;"/>
+      <replacefilter token="&lt;distributionManagement&gt;" value="&lt;!--distributionManagement&gt;"/>
+      <replacefilter token="&lt;/distributionManagement&gt;" value="&lt;/distributionManagement--&gt;"/>
+    </replace>
+  </target>
+
+  <target name="javadoc" depends="extract">
+    <copy file="${work}/jsf-api.pom" tofile="${work}/api/doc-pom.xml"/>
+    <replace file="${work}/api/doc-pom.xml">
+      <replacefilter token="&lt;version&gt;${version}&lt;/version&gt;"
+                     value="&lt;version&gt;${my-version}&lt;/version&gt;"/>
+      <replacefilter token="&lt;extensions&gt;" value="&lt;!--extensions&gt;"/>
+      <replacefilter token="&lt;/extensions&gt;" value="&lt;/extensions--&gt;"/>
+      <replacefilter token="&lt;repositories&gt;" value="&lt;!--repositories&gt;"/>
+      <replacefilter token="&lt;/repositories&gt;" value="&lt;/repositories--&gt;"/>
+      <replacefilter token="&lt;distributionManagement&gt;" value="&lt;!--distributionManagement&gt;"/>
+      <replacefilter token="&lt;/distributionManagement&gt;" value="&lt;/distributionManagement--&gt;"/>
+    </replace>
+    <copy file="${work}/jsf-impl.pom" tofile="${work}/impl/doc-pom.xml"/>
+    <replace file="${work}/impl/doc-pom.xml">
+      <replacefilter token="&lt;version&gt;${version}&lt;/version&gt;"
+                     value="&lt;version&gt;${my-version}&lt;/version&gt;"/>
+      <replacefilter token="&lt;extensions&gt;" value="&lt;!--extensions&gt;"/>
+      <replacefilter token="&lt;/extensions&gt;" value="&lt;/extensions--&gt;"/>
+      <replacefilter token="&lt;repositories&gt;" value="&lt;!--repositories&gt;"/>
+      <replacefilter token="&lt;/repositories&gt;" value="&lt;/repositories--&gt;"/>
+      <replacefilter token="&lt;distributionManagement&gt;" value="&lt;!--distributionManagement&gt;"/>
+      <replacefilter token="&lt;/distributionManagement&gt;" value="&lt;/distributionManagement--&gt;"/>
+      <replacefilter token="&lt;dependencies&gt;" value="&lt;dependencies&gt;
+&lt;dependency&gt;
+&lt;groupId&gt;com.sun.faces&lt;/groupId&gt;
+&lt;artifactId&gt;jsf-api&lt;/artifactId&gt;
+&lt;version&gt;${version}&lt;/version&gt;
+&lt;/dependency&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.apache.geronimo.specs&lt;/groupId&gt;
+      &lt;artifactId&gt;geronimo-servlet_3.0_spec&lt;/artifactId&gt;
+      &lt;version&gt;1.0&lt;/version&gt;
+      &lt;scope&gt;provided&lt;/scope&gt;
+    &lt;/dependency&gt;"/>
+    </replace>
+    <artifact:mvn pom="${work}/api/doc-pom.xml" mavenVersion="2.2.1">
+      <arg value="org.apache.maven.plugins:maven-javadoc-plugin:2.4:jar"/>
+    </artifact:mvn>
+    <artifact:mvn pom="${work}/impl/doc-pom.xml" mavenVersion="2.2.1">
+      <arg value="org.apache.maven.plugins:maven-javadoc-plugin:2.4:jar"/>
+      <arg value="source:jar"/>
+    </artifact:mvn>
+  </target>
+
+  <target name="package" depends="javadoc">
+    <mkdir dir="${work}/api/target"/>
+    <copy file="${work}/api/pom.xml" tofile="${work}/api/target/jsf-api-${my-version}.pom"/>
+    <copy file="${work}/jsf-api.jar" tofile="${work}/api/target/jsf-api-${my-version}.jar"/>
+    <copy file="${work}/jsf-api-sources.jar"
+          tofile="${work}/api/target/jsf-api-${my-version}-sources.jar"/>
+    <mkdir dir="${work}/impl/target"/>
+    <copy file="${work}/impl/pom.xml" tofile="${work}/impl/target/jsf-impl-${my-version}.pom"/>
+    <copy file="${work}/jsf-impl.jar" tofile="${work}/impl/target/jsf-impl-${my-version}.jar"/>
+    <apply executable="gpg" dir="${work}/api/target" parallel="false">
+      <arg value="-u"/>
+      <arg value="${gpg-user}"/>
+      <arg value="--armor"/>
+      <arg value="--output"/>
+      <targetfile/>
+      <arg value="--detach-sig"/>
+      <srcfile/>
+      <fileset dir="${work}/api/target" includes="*.jar"/>
+      <mapper type="glob" from="*.jar" to="${work}/api/target/*.jar.asc"/>
+    </apply>
+    <apply executable="gpg" dir="${work}/api" parallel="false">
+      <arg value="-u"/>
+      <arg value="${gpg-user}"/>
+      <arg value="--armor"/>
+      <arg value="--output"/>
+      <targetfile/>
+      <arg value="--detach-sig"/>
+      <srcfile/>
+      <fileset dir="${work}/api" includes="pom.xml"/>
+      <mapper type="glob" from="pom.xml" to="${work}/api/target/jsf-api-${my-version}.pom.asc"/>
+    </apply>
+    <apply executable="gpg" dir="${work}/impl/target" parallel="false">
+      <arg value="-u"/>
+      <arg value="${gpg-user}"/>
+      <arg value="--armor"/>
+      <arg value="--output"/>
+      <targetfile/>
+      <arg value="--detach-sig"/>
+      <srcfile/>
+      <fileset dir="${work}/impl/target" includes="*.jar"/>
+      <mapper type="glob" from="*.jar" to="${work}/impl/target/*.jar.asc"/>
+    </apply>
+    <apply executable="gpg" dir="${work}/impl" parallel="false">
+      <arg value="-u"/>
+      <arg value="${gpg-user}"/>
+      <arg value="--armor"/>
+      <arg value="--output"/>
+      <targetfile/>
+      <arg value="--detach-sig"/>
+      <srcfile/>
+      <fileset dir="${work}/impl" includes="pom.xml"/>
+      <mapper type="glob" from="pom.xml" to="${work}/impl/target/jsf-impl-${my-version}.pom.asc"/>
+    </apply>
+
+    <jar file="jsf-api-${my-version}-bundle.jar">
+      <fileset dir="${work}/api/target" includes="*.jar"/>
+      <fileset dir="${work}/api" includes="pom.xml"/>
+      <fileset dir="${work}/api/target" includes="*.asc"/>
+    </jar>
+    <jar file="jsf-impl-${my-version}-bundle.jar">
+      <fileset dir="${work}/impl/target" includes="*.jar"/>
+      <fileset dir="${work}/impl" includes="pom.xml"/>
+      <fileset dir="${work}/impl/target" includes="*.asc"/>
+    </jar>
+  </target>
+
+</project>
